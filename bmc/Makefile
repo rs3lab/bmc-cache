@@ -21,8 +21,8 @@ LIBBPF_PATH = $(LINUX_LIB_PATH)/bpf
 
 TARGETS += bmc
 
-CLANG ?= clang-9
-LLC ?= llc-9
+CLANG ?= clang
+LLC ?= llc
 CC := gcc
 
 KERN_SOURCES = ${TARGETS:=_kern.c}

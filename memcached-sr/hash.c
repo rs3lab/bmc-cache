@@ -3,6 +3,9 @@
 #include "memcached.h"
 #include "jenkins_hash.h"
 #include "murmur3_hash.h"
+#include "hash.h"
+
+hash_func hash;
 
 int hash_init(enum hashfunc_type type) {
     switch(type) {
