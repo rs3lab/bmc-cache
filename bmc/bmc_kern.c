@@ -14,7 +14,7 @@
 #include <linux/ip.h>
 #include <linux/udp.h>
 #include <linux/tcp.h>
-#include "bpf_helpers.h"
+#include <bpf_helpers.h>
 
 #include "bmc_common.h"
 
@@ -168,7 +168,7 @@ int bmc_rx_filter_main(struct xdp_md *ctx)
 
 			unsigned int off;
 #pragma clang loop unroll(disable)
-			for (off = 4; off < BMC_MAX_PACKET_LENGTH && payload+off+1 <= data_end && payload[off] == ' '; off++) {} // move offset to the start of the first key
+			for (off = 4; off < BMC_MAX_PACKET_LENGTH && payload+off + 2 < data_end && payload[off] == ' '; off++) {} // move offset to the start of the first key
 			if (off < BMC_MAX_PACKET_LENGTH) {
 				pctx->read_pkt_offset = off; // save offset
 				if (bpf_xdp_adjust_head(ctx, (int)(sizeof(*eth) + sizeof(*ip) + sizeof(*udp) + sizeof(struct memcached_udp_header) + off))) { // push headers + 'get ' keyword
@@ -212,7 +212,7 @@ int bmc_hash_keys_main(struct xdp_md *ctx)
 
 	// compute the key hash
 #pragma clang loop unroll(disable)
-	for (off = 0; off < BMC_MAX_KEY_LENGTH+1 && payload+off+1 <= data_end; off++) {
+	for (off = 0; off < BMC_MAX_KEY_LENGTH+1 && payload+off + 2 < data_end; off++) {
 		if (payload[off] == '\r') {
 			done_parsing = 1;
 			break;
@@ -243,7 +243,7 @@ int bmc_hash_keys_main(struct xdp_md *ctx)
 		bpf_spin_unlock(&entry->lock);
 		unsigned int i = 0;
 #pragma clang loop unroll(disable)
-		for (; i < key_len && payload+i+1 <= data_end; i++) { // copy the request key to compare it with the one stored in the cache later
+		for (; i < key_len && payload+i+ 2 < data_end; i++) { // copy the request key to compare it with the one stored in the cache later
 			key->data[i] = payload[i];
 		}
 		key->len = key_len;
@@ -358,13 +358,13 @@ int bmc_write_reply_main(struct xdp_md *ctx)
 		if (cache_hit) { // if cache HIT then copy cached data
 			unsigned int off;
 #pragma clang loop unroll(disable)
-			for (off = 0; off+sizeof(unsigned long long) < BMC_MAX_CACHE_DATA_SIZE && off+sizeof(unsigned long long) <= entry->len && payload+off+sizeof(unsigned long long) <= data_end; off++) {
+			for (off = 0; off+sizeof(unsigned long long) < BMC_MAX_CACHE_DATA_SIZE && off+sizeof(unsigned long long) <= entry->len && payload+off+sizeof(unsigned long long) + 1 < data_end; off++) {
 				*((unsigned long long *) &payload[off]) = *((unsigned long long *) &entry->data[off]);
 				off += sizeof(unsigned long long)-1;
 				written += sizeof(unsigned long long);
 			}
 #pragma clang loop unroll(disable)
-			for (; off < BMC_MAX_CACHE_DATA_SIZE && off < entry->len && payload+off+1 <= data_end; off++) {
+			for (; off < BMC_MAX_CACHE_DATA_SIZE && off < entry->len && payload+off + 2 < data_end; off++) {
 				payload[off] = entry->data[off];
 				written += 1;
 			}
@@ -385,7 +385,7 @@ int bmc_write_reply_main(struct xdp_md *ctx)
 	pctx->current_key++;
 
 	if (pctx->current_key == pctx->key_count && (pctx->write_pkt_offset > 0 || written > 0)) { // if all saved keys have been processed and a least one cache HIT
-		if (payload+written+5 <= data_end) {
+		if (payload+written+6 < data_end) {
 			payload[written++] = 'E';
 			payload[written++] = 'N';
 			payload[written++] = 'D';
@@ -452,9 +452,9 @@ int bmc_invalidate_cache_main(struct xdp_md *ctx)
 	int set_found = 0, key_found = 0;
 
 #pragma clang loop unroll(disable)
-	for (unsigned int off = 0; off < BMC_MAX_PACKET_LENGTH && payload+off+1 <= data_end; off++) {
+	for (unsigned int off = 0; off < BMC_MAX_PACKET_LENGTH && payload+off+2 < data_end; off++) {
 
-		if (set_found == 0 && payload[off] == 's' && payload+off+3 <= data_end && payload[off+1] == 'e' && payload[off+2] == 't') {
+		if (set_found == 0 && payload[off] == 's' && payload+off+4 < data_end && payload[off+1] == 'e' && payload[off+2] == 't') {
 			set_found = 1;
 			off += 3; // move offset after the set keywork, at the next iteration 'off' will either point to a space or the start of the key
 			stats->set_recv_count++;
@@ -522,7 +522,7 @@ int bmc_tx_filter_main(struct __sk_buff *skb)
 
 	__be16 sport = udp->source;
 
-	if (sport == htons(11211) && payload+5+1 <= data_end && payload[0] == 'V' && payload[1] == 'A' && payload[2] == 'L'
+	if (sport == htons(11211) && payload+5+2 < data_end && payload[0] == 'V' && payload[1] == 'A' && payload[2] == 'L'
 		&& payload[3] == 'U' && payload[4] == 'E' && payload[5] == ' ') { // if this is a GET reply
 
 		struct bmc_stats *stats = bpf_map_lookup_elem(&map_stats, &zero);
@@ -549,7 +549,7 @@ int bmc_update_cache_main(struct __sk_buff *skb)
 
 	// compute the key hash
 #pragma clang loop unroll(disable)
-	for (unsigned int off = 6; off-6 < BMC_MAX_KEY_LENGTH && payload+off+1 <= data_end && payload[off] != ' '; off++) {
+	for (unsigned int off = 6; off-6 < BMC_MAX_KEY_LENGTH && payload+off+2 < data_end && payload[off] != ' '; off++) {
 		hash ^= payload[off];
 		hash *= FNV_PRIME_32;
 	}
@@ -565,7 +565,7 @@ int bmc_update_cache_main(struct __sk_buff *skb)
 		int diff = 0;
 		// loop until both bytes are spaces ; or break if they are different
 #pragma clang loop unroll(disable)
-		for (unsigned int off = 6; off-6 < BMC_MAX_KEY_LENGTH && payload+off+1 <= data_end && off < entry->len && (payload[off] != ' ' || entry->data[off] != ' '); off++) {
+		for (unsigned int off = 6; off-6 < BMC_MAX_KEY_LENGTH && payload+off+2 < data_end && off < entry->len && (payload[off] != ' ' || entry->data[off] != ' '); off++) {
 			if (entry->data[off] != payload[off]) {
 				diff = 1;
 				break;
@@ -581,7 +581,7 @@ int bmc_update_cache_main(struct __sk_buff *skb)
 	entry->len = 0;
 	// store the reply from start to the '\n' that follows the data
 #pragma clang loop unroll(disable)
-	for (unsigned int j = 0; j < BMC_MAX_CACHE_DATA_SIZE && payload+j+1 <= data_end && count < 2; j++) {
+	for (unsigned int j = 0; j < BMC_MAX_CACHE_DATA_SIZE && payload+j+2 < data_end && count < 2; j++) {
 		entry->data[j] = payload[j];
 		entry->len++;
 		if (payload[j] == '\n')
