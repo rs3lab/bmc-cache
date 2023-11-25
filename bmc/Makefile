@@ -49,7 +49,8 @@ LINUXINCLUDE += -I$(LINUX_PATH)/arch/$(ARCH)/include/generated/uapi
 LINUXINCLUDE += -I$(LINUX_PATH)/include
 LINUXINCLUDE += -I$(LINUX_PATH)/include/uapi
 LINUXINCLUDE += -I$(LINUX_PATH)/include/generated/uapi
-LINUXINCLUDE += -I$(LINUX_PATH)/tools/testing/selftests/bpf
+LINUXINCLUDE += -I$(LINUX_PATH)/tools/lib/bpf
+#LINUXINCLUDE += -I$(LINUX_PATH)/tools/testing/selftests/bpf
 #LINUXINCLUDE += -include $(LINUX_PATH)/include/linux/kconfig.h
 #LINUXINCLUDE += -include $(LINUX_PATH)/samples/bpf/asm_goto_workaround.h
 
@@ -128,4 +129,4 @@ $(KERN_OBJECTS): %.o: %.c
 # $(LLC) -march=bpf -g -filetype=obj -o $@ ${@:.o=.ll}
 
 $(TARGETS): %: %_user.c $(OBJECTS) $(LIBBPF)
-	$(CC) $(CFLAGS) $(OBJECTS) -o $@ $< $(LIBBPF) $(LDFLAGS)
+	$(CC) $(CFLAGS) $(OBJECTS) -o $@ $< $(LIBBPF) $(LDFLAGS) -lz

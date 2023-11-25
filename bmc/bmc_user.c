@@ -17,8 +17,9 @@
 #include <assert.h>
 #include <errno.h>
 #include <sys/resource.h>
-#include <linux/if_link.h>
 #include <linux/limits.h>
+#include "/usr/include/asm-generic/posix_types.h"
+#include "/usr/include/linux/if_link.h"
 
 #include <linux/bpf.h>
 #include <bpf/bpf.h>
@@ -42,14 +43,14 @@ struct bpf_progs_desc {
 };
 
 static struct bpf_progs_desc progs[] = {
-	{"bmc_rx_filter", BPF_PROG_TYPE_XDP, 0, -1, NULL},
-	{"bmc_hash_keys", BPF_PROG_TYPE_XDP, 0, BMC_PROG_XDP_HASH_KEYS, NULL},
-	{"bmc_prepare_packet", BPF_PROG_TYPE_XDP, 0, BMC_PROG_XDP_PREPARE_PACKET, NULL},
-	{"bmc_write_reply", BPF_PROG_TYPE_XDP, 0, BMC_PROG_XDP_WRITE_REPLY, NULL},
-	{"bmc_invalidate_cache", BPF_PROG_TYPE_XDP, 0, BMC_PROG_XDP_INVALIDATE_CACHE, NULL},
+	{"bmc_rx_filter_main", BPF_PROG_TYPE_XDP, 0, -1, NULL},
+	{"bmc_hash_keys_main", BPF_PROG_TYPE_XDP, 0, BMC_PROG_XDP_HASH_KEYS, NULL},
+	{"bmc_prepare_packet_main", BPF_PROG_TYPE_XDP, 0, BMC_PROG_XDP_PREPARE_PACKET, NULL},
+	{"bmc_write_reply_main", BPF_PROG_TYPE_XDP, 0, BMC_PROG_XDP_WRITE_REPLY, NULL},
+	{"bmc_invalidate_cache_main", BPF_PROG_TYPE_XDP, 0, BMC_PROG_XDP_INVALIDATE_CACHE, NULL},
 
-	{"bmc_tx_filter", BPF_PROG_TYPE_SCHED_CLS, 1, -1, NULL},
-	{"bmc_update_cache", BPF_PROG_TYPE_SCHED_CLS, 0, BMC_PROG_TC_UPDATE_CACHE, NULL},
+	{"bmc_tx_filter_main", BPF_PROG_TYPE_SCHED_CLS, 1, -1, NULL},
+	{"bmc_update_cache_main", BPF_PROG_TYPE_SCHED_CLS, 0, BMC_PROG_TC_UPDATE_CACHE, NULL},
 };
 
 uint32_t fnv1a_hash32(char *key, size_t length, uint32_t hash)
@@ -140,7 +141,7 @@ int main(int argc, char *argv[])
 {
 	struct rlimit r = {RLIM_INFINITY, RLIM_INFINITY};
 	int map_progs_xdp_fd, xdp_main_prog_fd, map_progs_tc_fd, map_progs_fd, map_stats_fd;
-	struct bpf_object_load_attr load_attr;
+	LIBBPF_OPTS(bpf_object_open_opts, open_opts);
 	struct bpf_object *obj;
 	char filename[PATH_MAX];
 	int err, prog_count;
@@ -216,27 +217,25 @@ int main(int argc, char *argv[])
 	}
 	libbpf_set_print(print_bpf_verifier);
 
-	obj = bpf_object__open(filename);
+	open_opts.kernel_log_level = LIBBPF_WARN;
+	obj = bpf_object__open_file(filename, &open_opts);
 	if (!obj) {
 		fprintf(stderr, "Error: bpf_object__open failed\n");
 		return 1;
 	}
 
 	prog_count = sizeof(progs) / sizeof(progs[0]);
-
+/*
 	for (int i = 0; i < prog_count; i++) {
-		progs[i].prog = bpf_object__find_program_by_title(obj, progs[i].name);
+		progs[i].prog = bpf_object__find_program_by_name(obj, progs[i].name);
 		if (!progs[i].prog) {
-			fprintf(stderr, "Error: bpf_object__find_program_by_title failed\n");
+			fprintf(stderr, "Error: bpf_object__find_program_by_name failed\n");
 			return 1;
 		}
 		bpf_program__set_type(progs[i].prog, progs[i].type);
 	}
-
-	load_attr.obj = obj;
-	load_attr.log_level = LIBBPF_WARN;
-
-	err = bpf_object__load_xattr(&load_attr);
+*/
+	err = bpf_object__load(obj);
 	if (err) {
 		fprintf(stderr, "Error: bpf_object__load_xattr failed\n");
 		return 1;
@@ -298,11 +297,11 @@ int main(int argc, char *argv[])
 				return -1;
 			}
 retry:
-			if (bpf_program__pin_instance(progs[i].prog, filename, 0)) {
+			if (bpf_program__pin(progs[i].prog, filename)) {
 				fprintf(stderr, "Error: Failed to pin program '%s' to path %s\n", progs[i].name, filename);
 				if (errno == EEXIST) {
 					fprintf(stdout, "BPF program '%s' already pinned, unpinning it to reload it\n", progs[i].name);
-					if (bpf_program__unpin_instance(progs[i].prog, filename, 0)) {
+					if (bpf_program__unpin(progs[i].prog, filename)) {
 						fprintf(stderr, "Error: Fail to unpin program '%s' at %s\n", progs[i].name, filename);
 						return -1;
 					}
@@ -326,7 +325,7 @@ retry:
 	}
 
 	for (int i = 0; i < interface_count; i++) {
-		if (bpf_set_link_xdp_fd(interfaces_idx[i], xdp_main_prog_fd, xdp_flags) < 0) {
+		if (bpf_xdp_attach(interfaces_idx[i], xdp_main_prog_fd, xdp_flags, NULL) < 0) {
 			fprintf(stderr, "Error: bpf_set_link_xdp_fd failed for interface %d\n", interfaces_idx[i]);
 			return 1;
 		} else {
@@ -393,7 +392,7 @@ retry:
 	}
 
 	for (int i = 0; i < interface_count; i++) {
-		bpf_set_link_xdp_fd(interfaces_idx[i], -1, xdp_flags);
+		bpf_xdp_attach(interfaces_idx[i], -1, xdp_flags, NULL);
 	}
 
 	return ret;
