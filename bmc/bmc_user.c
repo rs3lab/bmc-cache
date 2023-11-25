@@ -225,16 +225,15 @@ int main(int argc, char *argv[])
 	}
 
 	prog_count = sizeof(progs) / sizeof(progs[0]);
-/*
+
 	for (int i = 0; i < prog_count; i++) {
 		progs[i].prog = bpf_object__find_program_by_name(obj, progs[i].name);
 		if (!progs[i].prog) {
 			fprintf(stderr, "Error: bpf_object__find_program_by_name failed\n");
 			return 1;
 		}
-		bpf_program__set_type(progs[i].prog, progs[i].type);
+		// bpf_program__set_type(progs[i].prog, progs[i].type);
 	}
-*/
 	err = bpf_object__load(obj);
 	if (err) {
 		fprintf(stderr, "Error: bpf_object__load_xattr failed\n");
