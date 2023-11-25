@@ -602,4 +602,5 @@ int bmc_update_cache_main(struct __sk_buff *skb) {
 	return TC_ACT_OK;
 }
 
+char _license[] SEC("license") = "GPL";
 // to test colisions: keys declinate0123456 and macallums0123456 have hash colision
