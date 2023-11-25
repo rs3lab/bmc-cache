@@ -12,7 +12,7 @@
 #include "vmlinux.h"
 
 #include "bmc_common.h"
-#include "bpf_helpers.h"
+#include <bpf_helpers.h>
 
 #define htons bpf_htons
 
@@ -70,35 +70,36 @@ struct parsing_context {
 	unsigned short read_pkt_offset;
 	unsigned short write_pkt_offset;
 };
-struct bpf_map_def SEC("maps") map_parsing_context = {
-    .type = BPF_MAP_TYPE_PERCPU_ARRAY,
-    .key_size = sizeof(unsigned int),
-    .value_size = sizeof(struct parsing_context),
-    .max_entries = 1,
-};
+
+struct {
+	__uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
+	__type(key, unsigned int);
+	__type(value, struct parsing_context);
+	__uint(max_entries, 1);
+} map_parsing_context SEC(".maps");
 
 /* stats */
-struct bpf_map_def SEC("maps") map_stats = {
-    .type = BPF_MAP_TYPE_PERCPU_ARRAY,
-    .key_size = sizeof(unsigned int),
-    .value_size = sizeof(struct bmc_stats),
-    .max_entries = 1,
-};
+struct {
+	__uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
+	__type(key, unsigned int);
+	__type(value, struct bmc_stats);
+	__uint(max_entries, 1);
+} map_stats SEC(".maps");
 
 /* program maps */
-struct bpf_map_def SEC("maps") map_progs_xdp = {
-    .type = BPF_MAP_TYPE_PROG_ARRAY,
-    .key_size = sizeof(u32),
-    .value_size = sizeof(u32),
-    .max_entries = BMC_PROG_XDP_MAX,
-};
+struct {
+	__uint(type, BPF_MAP_TYPE_PROG_ARRAY);
+	__type(key, u32);
+	__type(value, u32);
+	__uint(max_entries, BMC_PROG_XDP_MAX);
+} map_progs_xdp SEC(".maps");
 
-struct bpf_map_def SEC("maps") map_progs_tc = {
-    .type = BPF_MAP_TYPE_PROG_ARRAY,
-    .key_size = sizeof(u32),
-    .value_size = sizeof(u32),
-    .max_entries = BMC_PROG_TC_MAX,
-};
+struct {
+	__uint(type, BPF_MAP_TYPE_PROG_ARRAY);
+	__type(key, u32);
+	__type(value, u32);
+	__uint(max_entries, BMC_PROG_TC_MAX);
+} map_progs_tc SEC(".maps");
 
 static inline u16 compute_ip_checksum(struct iphdr *ip) {
 	u32 csum = 0;
@@ -114,7 +115,7 @@ static inline u16 compute_ip_checksum(struct iphdr *ip) {
 	return ~((csum & 0xffff) + (csum >> 16));
 }
 
-SEC("bmc_rx_filter")
+SEC("xdp")
 int bmc_rx_filter_main(struct xdp_md *ctx) {
 	void *data_end = (void *)(long)ctx->data_end;
 	void *data = (void *)(long)ctx->data;
@@ -197,7 +198,7 @@ int bmc_rx_filter_main(struct xdp_md *ctx) {
 	return XDP_PASS;
 }
 
-SEC("bmc_hash_keys")
+SEC("xdp")
 int bmc_hash_keys_main(struct xdp_md *ctx) {
 	void *data_end = (void *)(long)ctx->data_end;
 	void *data = (void *)(long)ctx->data;
@@ -281,7 +282,7 @@ int bmc_hash_keys_main(struct xdp_md *ctx) {
 	return XDP_PASS;
 }
 
-SEC("bmc_prepare_packet")
+SEC("xdp")
 int bmc_prepare_packet_main(struct xdp_md *ctx) {
 	if (bpf_xdp_adjust_head(ctx, -ADJUST_HEAD_LEN))	 // // pop empty packet buffer memory to increase the available packet size
 		return XDP_PASS;
@@ -326,7 +327,7 @@ int bmc_prepare_packet_main(struct xdp_md *ctx) {
 	return XDP_PASS;
 }
 
-SEC("bmc_write_reply")
+SEC("xdp")
 int bmc_write_reply_main(struct xdp_md *ctx) {
 	void *data_end = (void *)(long)ctx->data_end;
 	void *data = (void *)(long)ctx->data;
@@ -434,7 +435,7 @@ int bmc_write_reply_main(struct xdp_md *ctx) {
 	return XDP_DROP;
 }
 
-SEC("bmc_invalidate_cache")
+SEC("xdp")
 int bmc_invalidate_cache_main(struct xdp_md *ctx) {
 	void *data_end = (void *)(long)ctx->data_end;
 	void *data = (void *)(long)ctx->data;
@@ -496,7 +497,7 @@ int bmc_invalidate_cache_main(struct xdp_md *ctx) {
 	return XDP_PASS;
 }
 
-SEC("bmc_tx_filter")
+SEC("xdp")
 int bmc_tx_filter_main(struct __sk_buff *skb) {
 	void *data_end = (void *)(long)skb->data_end;
 	void *data = (void *)(long)skb->data;
@@ -535,7 +536,7 @@ int bmc_tx_filter_main(struct __sk_buff *skb) {
 	return TC_ACT_OK;
 }
 
-SEC("bmc_update_cache")
+SEC("xdp")
 int bmc_update_cache_main(struct __sk_buff *skb) {
 	void *data_end = (void *)(long)skb->data_end;
 	void *data = (void *)(long)skb->data;
