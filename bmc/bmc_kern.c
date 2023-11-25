@@ -389,16 +389,20 @@ int bmc_write_reply_main(struct xdp_md *ctx) {
 		if (cache_hit) {  // if cache HIT then copy cached data
 			unsigned int off;
 #pragma clang loop unroll(disable)
-			for (off = 0; off + sizeof(unsigned long long) < BMC_MAX_CACHE_DATA_SIZE && off + sizeof(unsigned long long) <= entry->len; off++) {
+			for (off = 0; off + sizeof(unsigned long long) < BMC_MAX_CACHE_DATA_SIZE; off++) {
 				payload = bpf_dynptr_data(&xdp, off, sizeof(unsigned long long));
 				if (!payload)
+					break;
+				if (off + sizeof(unsigned long long) > entry->len)
 					break;
 				*((unsigned long long *)payload) = *((unsigned long long *)&entry->data[off]);
 				off += sizeof(unsigned long long) - 1;
 				written += sizeof(unsigned long long);
 			}
 #pragma clang loop unroll(disable)
-			for (; off < BMC_MAX_CACHE_DATA_SIZE && off < entry->len; off++) {
+			for (; off < BMC_MAX_CACHE_DATA_SIZE; off++) {
+				if (off >= entry->len)
+					break;
 				payload = bpf_dynptr_data(&xdp, off, 1);
 				if (!payload)
 					break;
@@ -422,12 +426,12 @@ int bmc_write_reply_main(struct xdp_md *ctx) {
 	pctx->current_key++;
 
 	if (pctx->current_key == pctx->key_count && (pctx->write_pkt_offset > 0 || written > 0)) {  // if all saved keys have been processed and a least one cache HIT
-		if (payload + written + 5 <= data_end) {
-			payload[written++] = 'E';
-			payload[written++] = 'N';
-			payload[written++] = 'D';
-			payload[written++] = '\r';
-			payload[written++] = '\n';
+		if ((payload = bpf_dynptr_data(&xdp, written, 5))) {
+			payload[0] = 'E';
+			payload[1] = 'N';
+			payload[2] = 'D';
+			payload[3] = '\r';
+			payload[4] = '\n';
 
 			if (bpf_xdp_adjust_head(ctx, 0 - (int)(sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct udphdr) + sizeof(struct memcached_udp_header) + pctx->write_pkt_offset))) {	 // pop headers + previously written data
 				return XDP_DROP;
@@ -600,7 +604,7 @@ int bmc_update_cache_main(struct __sk_buff *skb) {
 		payload = bpf_dynptr_data(&dskb, off, 1);
 		if (!payload || payload[0] == ' ')
 			break;
-		hash ^= payload[off];
+		hash ^= payload[0];
 		hash *= FNV_PRIME_32;
 	}
 
@@ -624,7 +628,7 @@ int bmc_update_cache_main(struct __sk_buff *skb) {
 			payload = bpf_dynptr_data(&dskb, off, 1);
 			if (!payload || payload[0] == ' ')
 				break;
-			if (entry->data[off] != payload[off]) {
+			if (entry->data[off] != payload[0]) {
 				diff = 1;
 				break;
 			}
