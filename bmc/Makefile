@@ -50,8 +50,8 @@ LINUXINCLUDE += -I$(LINUX_PATH)/include
 LINUXINCLUDE += -I$(LINUX_PATH)/include/uapi
 LINUXINCLUDE += -I$(LINUX_PATH)/include/generated/uapi
 LINUXINCLUDE += -I$(LINUX_PATH)/tools/testing/selftests/bpf
-LINUXINCLUDE += -include $(LINUX_PATH)/include/linux/kconfig.h
-LINUXINCLUDE += -include $(LINUX_PATH)/samples/bpf/asm_goto_workaround.h
+#LINUXINCLUDE += -include $(LINUX_PATH)/include/linux/kconfig.h
+#LINUXINCLUDE += -include $(LINUX_PATH)/samples/bpf/asm_goto_workaround.h
 
 EXTRA_CFLAGS=-Werror
 

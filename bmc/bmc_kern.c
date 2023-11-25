@@ -9,23 +9,19 @@
  *  Author: Yoann GHIGOFF <yoann.ghigoff@orange.com> et al.
  */
 
-#include <linux/bpf.h>
-#include <linux/if_ether.h>
-#include <linux/ip.h>
-#include <linux/tcp.h>
-#include <linux/udp.h>
+#include "vmlinux.h"
 
 #include "bmc_common.h"
 #include "bpf_helpers.h"
 
-struct bpf_dynptr {
-	u64 a;
-	u64 b;
-};
+#define htons bpf_htons
 
 #define __ksym __attribute__((section(".ksyms")))
 #include "bpf_kfuncs.h"
 void *(*bpf_dynptr_data)(const struct bpf_dynptr *ptr, u32 offset, u32 len) = (void *)230;
+
+#define ETH_ALEN 6
+#define TC_ACT_OK 0
 
 #define ADJUST_HEAD_LEN 128
 
@@ -310,9 +306,9 @@ int bmc_prepare_packet_main(struct xdp_md *ctx) {
 	__be32 tmp_ip;
 	__be16 tmp_port;
 
-	memcpy(tmp_mac, eth->h_source, ETH_ALEN);
-	memcpy(eth->h_source, eth->h_dest, ETH_ALEN);
-	memcpy(eth->h_dest, tmp_mac, ETH_ALEN);
+	__builtin_memcpy(tmp_mac, eth->h_source, ETH_ALEN);
+	__builtin_memcpy(eth->h_source, eth->h_dest, ETH_ALEN);
+	__builtin_memcpy(eth->h_dest, tmp_mac, ETH_ALEN);
 
 	tmp_ip = ip->saddr;
 	ip->saddr = ip->daddr;
