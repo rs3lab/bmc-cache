@@ -115,7 +115,7 @@ $(LIBBPF): $(wildcard $(LIBBPF_PATH)/*.[ch] $(LIBBPF_PATH)/Makefile)
 # unaligned access checks where necessary
 #
 $(KERN_OBJECTS): %.o: %.c
-	$(CLANG) -S $(NOSTDINC_FLAGS) $(LINUXINCLUDE) $(EXTRA_CFLAGS) \
+	$(CLANG) $(NOSTDINC_FLAGS) $(LINUXINCLUDE) $(EXTRA_CFLAGS) \
 	    -D__KERNEL__ -D__ASM_SYSREG_H -D__BPF_TRACING__ \
 	    -D__TARGET_ARCH_$(ARCH) \
 	    -Wno-unused-value -Wno-pointer-sign \
@@ -124,8 +124,8 @@ $(KERN_OBJECTS): %.o: %.c
 	    -Wno-tautological-compare \
 	    -Wno-unknown-warning-option \
 	    -Wno-address-of-packed-member \
-	    -O2 -g -emit-llvm -c $< -o ${@:.o=.ll}
-	$(LLC) -march=bpf -filetype=obj -o $@ ${@:.o=.ll}
+	    -O2 -g --target=bpf -c $<
+# $(LLC) -march=bpf -g -filetype=obj -o $@ ${@:.o=.ll}
 
 $(TARGETS): %: %_user.c $(OBJECTS) $(LIBBPF)
 	$(CC) $(CFLAGS) $(OBJECTS) -o $@ $< $(LIBBPF) $(LDFLAGS)
