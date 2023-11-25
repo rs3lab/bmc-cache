@@ -241,6 +241,8 @@ int main(int argc, char *argv[])
 		return 1;
 	}
 
+	printf("===========\nLOADED BPF PROGRAM\n===========\n");
+
 	map_progs_xdp_fd = bpf_object__find_map_fd_by_name(obj, "map_progs_xdp");
 	if (map_progs_xdp_fd < 0) {
 		fprintf(stderr, "Error: bpf_object__find_map_fd_by_name failed\n");
@@ -354,6 +356,7 @@ retry:
 	}
 
 	while (!quit) {
+		printf("...");
 		err = sigwait(&signal_mask, &sig);
 		if (err != 0) {
 			fprintf(stderr, "Error: Failed to wait for signal\n");
