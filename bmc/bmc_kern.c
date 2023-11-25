@@ -18,7 +18,6 @@
 
 #define __ksym __attribute__((section(".ksyms")))
 #include "bpf_kfuncs.h"
-void *(*bpf_dynptr_data)(const struct bpf_dynptr *ptr, u32 offset, u32 len) = (void *)230;
 
 #define ETH_ALEN 6
 #define TC_ACT_OK 0
