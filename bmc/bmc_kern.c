@@ -250,8 +250,13 @@ int bmc_hash_keys_main(struct xdp_md *ctx) {
 	// compute the key hash
 #pragma clang loop unroll(disable)
 	for (off = 0; off < BMC_MAX_KEY_LENGTH + 1; off++) {
-		payload = bpf_dynptr_slice(&xdp, off, buf, 1);
-		if (!payload)
+		// TODO(kkd): We cannot pass rdonly mem to global func, so use
+		// rdwr here, even though we only read stuff.
+		payload = bpf_dynptr_slice_rdwr(&xdp, off, buf, 1);
+		// Technically, payload == buf should not be true, in each frag
+		// at any offset, we can always obtain a direct pointer to 1
+		// byte. But anyway, another day.
+		if (!payload || payload == buf)
 			break;
 		global_parsing_func(&key->hash, &key_len, &done_parsing, payload);
 	}
