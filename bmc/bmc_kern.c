@@ -202,6 +202,9 @@ int bmc_rx_filter_main(struct xdp_md *ctx) {
 
 __attribute__((noinline))
 int global_parsing_func(u32 *hashp, int *lenp, unsigned int *done_parsingp, char *p) {
+	// TODO(kkd): Quirk of global function
+	if (!hashp || !lenp || !done_parsingp || !p)
+		return 1;
 	if (p[0] == '\r') {
 		*done_parsingp = 1;
 		return 1;
@@ -255,8 +258,9 @@ int bmc_hash_keys_main(struct xdp_md *ctx) {
 		payload = bpf_dynptr_slice_rdwr(&xdp, off, buf, 1);
 		// Technically, payload == buf should not be true, in each frag
 		// at any offset, we can always obtain a direct pointer to 1
-		// byte. But anyway, another day.
-		if (!payload || payload == buf)
+		// byte. But anyway, another day. But since we do not write into
+		// payload even though we use rdwr, we do not check it.
+		if (!payload)
 			break;
 		global_parsing_func(&key->hash, &key_len, &done_parsing, payload);
 	}
@@ -278,11 +282,18 @@ int bmc_hash_keys_main(struct xdp_md *ctx) {
 	bpf_spin_lock(&entry->lock);
 	if (entry->valid && entry->hash == key->hash) {	 // potential cache hit
 		bpf_spin_unlock(&entry->lock);
+		if ((int)key_len < 0 || key_len > BMC_MAX_KEY_LENGTH)
+			return XDP_PASS;
 #pragma clang loop unroll(disable)
 		for (unsigned int i = 0; i < key_len; i++) {
 			// copy the request key to compare it with the one stored in the cache later
 			payload = bpf_dynptr_slice(&xdp, i, buf, 1);
 			if (!payload)
+				return XDP_PASS;
+			// TODO(kkd): Use bpf_asserts to form proper ranges,
+			// verifier for instance cannot know about i and rejects
+			// our program.
+			if (i >= BMC_MAX_KEY_LENGTH)
 				return XDP_PASS;
 			key->data[i] = payload[0];
 		}
