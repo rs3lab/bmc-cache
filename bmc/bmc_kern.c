@@ -158,8 +158,8 @@ int bmc_rx_filter_main(struct xdp_md *ctx) {
 			return XDP_PASS;
 	}
 
-	payload = bpf_dynptr_slice_rdwr(&xdp, off, buf, 4);
-	if (!payload || payload == buf)
+	payload = bpf_dynptr_slice(&xdp, off, buf, 4);
+	if (!payload)
 		return XDP_PASS;
 	if (dport == htons(11211) && payload) {
 		if (ip->protocol == IPPROTO_UDP && payload[0] == 'g' && payload[1] == 'e' && payload[2] == 't' && payload[3] == ' ') {	// is this a GET request
@@ -181,8 +181,8 @@ int bmc_rx_filter_main(struct xdp_md *ctx) {
 			unsigned int off;
 #pragma clang loop unroll(disable)
 			for (off = 4; off < BMC_MAX_PACKET_LENGTH; off++) {
-				payload = bpf_dynptr_slice_rdwr(&xdp, off, buf, 1);
-				if (!payload || payload == buf || payload[0] == ' ')
+				payload = bpf_dynptr_slice(&xdp, off, buf, 1);
+				if (!payload || payload[0] == ' ')
 					break;
 			} // move offset to the start of the first key
 			if (off < BMC_MAX_PACKET_LENGTH) {
@@ -235,8 +235,8 @@ int bmc_hash_keys_main(struct xdp_md *ctx) {
 	// compute the key hash
 #pragma clang loop unroll(disable)
 	for (off = 0; off < BMC_MAX_KEY_LENGTH + 1; off++) {
-		payload = bpf_dynptr_slice_rdwr(&xdp, off, buf, 1);
-		if (!payload || payload == buf)
+		payload = bpf_dynptr_slice(&xdp, off, buf, 1);
+		if (!payload)
 			break;
 		if (payload[0] == '\r') {
 			done_parsing = 1;
@@ -261,8 +261,8 @@ int bmc_hash_keys_main(struct xdp_md *ctx) {
 		return XDP_PASS;
 	}
 
-	payload = bpf_dynptr_slice_rdwr(&xdp, off, buf, 1);
-	if (!payload || payload == buf)
+	payload = bpf_dynptr_slice(&xdp, off, buf, 1);
+	if (!payload)
 		return XDP_PASS;
 	bpf_spin_lock(&entry->lock);
 	if (entry->valid && entry->hash == key->hash) {	 // potential cache hit
@@ -270,8 +270,8 @@ int bmc_hash_keys_main(struct xdp_md *ctx) {
 #pragma clang loop unroll(disable)
 		for (unsigned int i = 0; i < key_len; i++) {
 			// copy the request key to compare it with the one stored in the cache later
-			payload = bpf_dynptr_slice_rdwr(&xdp, i, buf, 1);
-			if (!payload || payload == buf)
+			payload = bpf_dynptr_slice(&xdp, i, buf, 1);
+			if (!payload)
 				return XDP_PASS;
 			key->data[i] = payload[0];
 		}
@@ -506,10 +506,10 @@ int bmc_invalidate_cache_main(struct xdp_md *ctx) {
 
 #pragma clang loop unroll(disable)
 	for (unsigned int off = 0; off < BMC_MAX_PACKET_LENGTH; off++) {
-		payload = bpf_dynptr_slice_rdwr(&xdp, off, buf, 1);
-		if (!payload || payload == buf)
+		payload = bpf_dynptr_slice(&xdp, off, buf, 1);
+		if (!payload)
 			break;
-		if (set_found == 0 && (payload = bpf_dynptr_slice_rdwr(&xdp, off, buf, 3)) && payload != buf && payload[0] == 's' && payload[1] == 'e' && payload[2] == 't') {
+		if (set_found == 0 && (payload = bpf_dynptr_slice(&xdp, off, buf, 3)) && payload[0] == 's' && payload[1] == 'e' && payload[2] == 't') {
 			set_found = 1;
 			off += 3;  // move offset after the set keywork, at the next iteration 'off' will either point to a space or the start of the key
 			stats->set_recv_count++;
@@ -608,8 +608,8 @@ int bmc_update_cache_main(struct __sk_buff *skb) {
 	// compute the key hash
 #pragma clang loop unroll(disable)
 	for (unsigned int off = 6; off - 6 < BMC_MAX_KEY_LENGTH; off++) {
-		payload = bpf_dynptr_slice_rdwr(&dskb, off, buf, 1);
-		if (!payload || payload == buf || payload[0] == ' ')
+		payload = bpf_dynptr_slice(&dskb, off, buf, 1);
+		if (!payload || payload[0] == ' ')
 			break;
 		hash ^= payload[0];
 		hash *= FNV_PRIME_32;
@@ -625,15 +625,15 @@ int bmc_update_cache_main(struct __sk_buff *skb) {
 	if (entry->valid && entry->hash == hash) {  // cache is up-to-date; no need to update
 		int diff = 0;
 		// loop until both bytes are spaces ; or break if they are different
-		payload = bpf_dynptr_slice_rdwr(&dskb, 6, buf, 1);
-		if (!payload || payload == buf || payload[0] == ' ') {
+		payload = bpf_dynptr_slice(&dskb, 6, buf, 1);
+		if (!payload || payload[0] == ' ') {
 			bpf_spin_unlock(&entry->lock);
 			return TC_ACT_OK;
 		}
 #pragma clang loop unroll(disable)
 		for (unsigned int off = 6; off - 6 < BMC_MAX_KEY_LENGTH && off < entry->len && (payload[0] != ' ' || entry->data[off] != ' '); off++) {
-			payload = bpf_dynptr_slice_rdwr(&dskb, off, buf, 1);
-			if (!payload || payload == buf || payload[0] == ' ')
+			payload = bpf_dynptr_slice(&dskb, off, buf, 1);
+			if (!payload || payload[0] == ' ')
 				break;
 			if (entry->data[off] != payload[0]) {
 				diff = 1;
@@ -649,13 +649,13 @@ int bmc_update_cache_main(struct __sk_buff *skb) {
 	unsigned int count = 0;
 	entry->len = 0;
 	// store the reply from start to the '\n' that follows the data
-	payload = bpf_dynptr_slice_rdwr(&dskb, 0, buf, 1);
-	if (!payload || payload == buf)
+	payload = bpf_dynptr_slice(&dskb, 0, buf, 1);
+	if (!payload)
 		goto skip;
 #pragma clang loop unroll(disable)
 	for (unsigned int j = 0; j < BMC_MAX_CACHE_DATA_SIZE && count < 2; j++) {
-		payload = bpf_dynptr_slice_rdwr(&dskb, j, buf, 1);
-		if (!payload || payload == buf)
+		payload = bpf_dynptr_slice(&dskb, j, buf, 1);
+		if (!payload)
 			break;
 		entry->data[j] = payload[0];
 		entry->len++;
