@@ -124,9 +124,9 @@ int bmc_rx_filter_main(struct xdp_md *ctx) {
 	void *transp = data + sizeof(*eth) + sizeof(*ip);
 	struct udphdr *udp;
 	struct tcphdr *tcp;
+	char buf[8] = {};
 	char *payload;
 	__be16 dport;
-	char buf[8];
 	__u32 off;
 	int ret;
 
@@ -207,7 +207,7 @@ int bmc_hash_keys_main(struct xdp_md *ctx) {
 	char *payload = (char *)data;
 	unsigned int zero = 0;
 	struct bpf_dynptr xdp;
-	char buf[8];
+	char buf[8] = {};
 	int ret;
 
 	ret = bpf_dynptr_from_xdp(ctx, 0, &xdp);
@@ -354,7 +354,7 @@ int bmc_write_reply_main(struct xdp_md *ctx) {
 	char *payload = (char *)data;
 	unsigned int zero = 0;
 	struct bpf_dynptr xdp;
-	char buf[8];
+	char buf[8] = {};
 	int ret;
 
 	ret = bpf_dynptr_from_xdp(ctx, 0, &xdp);
@@ -484,7 +484,7 @@ int bmc_invalidate_cache_main(struct xdp_md *ctx) {
 	char *payload = (char *)(tcp + 1);
 	unsigned int zero = 0;
 	struct bpf_dynptr xdp;
-	char buf[8];
+	char buf[8] = {};
 	int ret;
 
 	ret = bpf_dynptr_from_xdp(ctx, 0, &xdp);
@@ -594,7 +594,7 @@ int bmc_update_cache_main(struct __sk_buff *skb) {
 	char *payload = (data + sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct udphdr) + sizeof(struct memcached_udp_header));
 	unsigned int zero = 0;
 	struct bpf_dynptr dskb;
-	char buf[8];
+	char buf[8] = {};
 	int ret;
 
 	ret = bpf_dynptr_from_skb(skb, 0, &dskb);
