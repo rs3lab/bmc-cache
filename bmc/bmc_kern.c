@@ -200,6 +200,21 @@ int bmc_rx_filter_main(struct xdp_md *ctx) {
 	return XDP_PASS;
 }
 
+__attribute__((noinline))
+int global_parsing_func(u32 *hashp, int *lenp, unsigned int *done_parsingp, char *p) {
+	if (p[0] == '\r') {
+		*done_parsingp = 1;
+		return 1;
+	} else if (p[0] == ' ') {
+		return 1;
+	} else if (p[0] != ' ') {
+		*hashp ^= p[0];
+		*hashp *= FNV_PRIME_32;
+		++*lenp;
+	}
+	return 0;
+}
+
 SEC("xdp")
 int bmc_hash_keys_main(struct xdp_md *ctx) {
 	void *data_end = (void *)(long)ctx->data_end;
@@ -238,16 +253,7 @@ int bmc_hash_keys_main(struct xdp_md *ctx) {
 		payload = bpf_dynptr_slice(&xdp, off, buf, 1);
 		if (!payload)
 			break;
-		if (payload[0] == '\r') {
-			done_parsing = 1;
-			break;
-		} else if (payload[0] == ' ') {
-			break;
-		} else if (payload[0] != ' ') {
-			key->hash ^= payload[0];
-			key->hash *= FNV_PRIME_32;
-			key_len++;
-		}
+		global_parsing_func(&key->hash, &key_len, &done_parsing, payload);
 	}
 
 	if (key_len == 0 || key_len > BMC_MAX_KEY_LENGTH) {
