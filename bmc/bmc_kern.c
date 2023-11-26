@@ -282,8 +282,6 @@ int bmc_hash_keys_main(struct xdp_md *ctx) {
 	bpf_spin_lock(&entry->lock);
 	if (entry->valid && entry->hash == key->hash) {	 // potential cache hit
 		bpf_spin_unlock(&entry->lock);
-		if ((int)key_len < 0 || key_len > BMC_MAX_KEY_LENGTH)
-			return XDP_PASS;
 #pragma clang loop unroll(disable)
 		for (unsigned int i = 0; i < key_len; i++) {
 			// copy the request key to compare it with the one stored in the cache later
