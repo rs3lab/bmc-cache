@@ -1,6 +1,8 @@
 BMC
 ===
 
+### WARNING: Don't configure traffic thrown at BMC to have value packet sizes bigger than the packet with key, as it doesn't perform resizing.
+
 ### __Code for the [NSDI'21 paper](https://www.usenix.org/system/files/nsdi21-ghigoff.pdf) *"BMC: Accelerating Memcached using Safe In-kernel Caching and Pre-stack Processing"*.__
 
 BibTex entry available [here](#cite-this-work).
@@ -12,7 +14,7 @@ Requirements
 
 Linux kernel __v5.3__ or higher is required to run BMC.
 
-Other software dependencies are required to build BMC and Memcached-SR (see [Building BMC](#building-bmc) and [Building Memcached-SR](#building-memcached-sr)). 
+Other software dependencies are required to build BMC and Memcached-SR (see [Building BMC](#building-bmc) and [Building Memcached-SR](#building-memcached-sr)).
 
 Build instructions
 ---
@@ -56,7 +58,7 @@ Either ```clang-9``` or ```gcc-9``` is required in order to compile memcached wi
 
 Memcached-SR can be built with the following:
 ```bash
-$ cd memcached-sr 
+$ cd memcached-sr
 $ ./autogen.sh
 $ CC=clang-9 CFLAGS='-DREUSEPORT_OPT=1 -Wno-deprecated-declarations' ./configure && make
 ```
