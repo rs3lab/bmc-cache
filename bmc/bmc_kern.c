@@ -113,7 +113,12 @@ static inline u16 compute_ip_checksum(struct iphdr *ip) {
 		csum += *next_ip_u16++;
 	}
 
-	return ~((csum & 0xffff) + (csum >> 16));
+	// TODO(kkd): This caused a bad checksum error midway the traffic
+	// stream, fix by doing the checksum folding correctly.
+	//return ~((csum & 0xffff) + (csum >> 16));
+	csum = (csum & 0xffff) + (csum >> 16);
+	csum = (csum & 0xffff) + (csum >> 16);
+	return (uint16_t)~csum;
 }
 
 SEC("xdp")
@@ -417,6 +422,7 @@ int bmc_write_reply_main(struct xdp_md *ctx) {
 	u32 cache_idx = key->hash % BMC_CACHE_ENTRY_COUNT;
 	struct bmc_cache_entry *entry = bpf_map_lookup_elem(&map_kcache, &cache_idx);
 	if (!entry) {
+		pr("Bad cache idx");
 		return XDP_DROP;
 	}
 
@@ -481,6 +487,8 @@ int bmc_write_reply_main(struct xdp_md *ctx) {
 			pr("Written END in payload");
 
 			if (bpf_xdp_adjust_head(ctx, 0 - (int)(sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct udphdr) + sizeof(struct memcached_udp_header) + pctx->write_pkt_offset))) {	 // pop headers + previously written data
+
+				pr("Bad bpf_xdp_adjust_head");
 				return XDP_DROP;
 			}
 
@@ -490,15 +498,25 @@ int bmc_write_reply_main(struct xdp_md *ctx) {
 			struct udphdr *udp = data + sizeof(struct ethhdr) + sizeof(*ip);
 			payload = data + sizeof(struct ethhdr) + sizeof(*ip) + sizeof(*udp) + sizeof(struct memcached_udp_header);
 
-			if (udp + 1 > data_end)
+			if (udp + 1 > data_end) {
+				pr("Can't write UDP header");
 				return XDP_PASS;
+			}
+
+			if ((void *)ip - data != 14) {
+				pr("IP header at wrong position");
+				return XDP_ABORTED;
+			}
 
 			ip->tot_len = htons((payload + pctx->write_pkt_offset + written) - (char *)ip);
 			ip->check = compute_ip_checksum(ip);
 			udp->check = 0;	 // computing udp checksum is not required
 			udp->len = htons((payload + pctx->write_pkt_offset + written) - (char *)udp);
 
-			bpf_xdp_adjust_tail(ctx, 0 - (int)((long)data_end - (long)(payload + pctx->write_pkt_offset + written)));  // try to strip additional bytes
+			if (bpf_xdp_adjust_tail(ctx, 0 - (int)((long)data_end - (long)(payload + pctx->write_pkt_offset + written)))) { // try to strip additional bytes
+				pr("Can't xdp_adjust_tail");
+				return XDP_PASS;
+			}
 
 			return XDP_TX;
 		} else {
