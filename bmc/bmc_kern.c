@@ -468,6 +468,7 @@ int bmc_write_reply_main(struct xdp_md *ctx) {
 
 	pctx->current_key++;
 
+	pr("pctx cur_key=%d pctx key_count=%d write_pkt_off=%d written=%d", pctx->current_key, pctx->key_count, pctx->write_pkt_offset, written);
 	if (pctx->current_key == pctx->key_count && (pctx->write_pkt_offset > 0 || written > 0)) {  // if all saved keys have been processed and a least one cache HIT
 		if ((payload = bpf_dynptr_slice_rdwr(&xdp, written, buf, 5)) && payload != buf) {
 			payload[0] = 'E';
@@ -475,6 +476,9 @@ int bmc_write_reply_main(struct xdp_md *ctx) {
 			payload[2] = 'D';
 			payload[3] = '\r';
 			payload[4] = '\n';
+			written += 5;
+
+			pr("Written END in payload");
 
 			if (bpf_xdp_adjust_head(ctx, 0 - (int)(sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct udphdr) + sizeof(struct memcached_udp_header) + pctx->write_pkt_offset))) {	 // pop headers + previously written data
 				return XDP_DROP;
@@ -497,6 +501,11 @@ int bmc_write_reply_main(struct xdp_md *ctx) {
 			bpf_xdp_adjust_tail(ctx, 0 - (int)((long)data_end - (long)(payload + pctx->write_pkt_offset + written)));  // try to strip additional bytes
 
 			return XDP_TX;
+		} else {
+			// TODO(kkd): BMC does not work when value > key, since
+			// it does not grow the packet at all!!!
+			pr("Cannot find linear segment");
+			return XDP_DROP;
 		}
 	} else if (pctx->current_key == pctx->key_count) {  // else if all saved keys have been processed but got no cache HIT; either because of a hash colision or a race with a cache update
 		stats->hit_misprediction += pctx->key_count;
